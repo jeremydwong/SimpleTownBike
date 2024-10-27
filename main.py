@@ -4,7 +4,8 @@ from ui_components import (
     render_header,
     render_device_scanner,
     render_device_selector,
-    render_connected_device
+    render_connected_device,
+    render_environment_info
 )
 
 def main():
@@ -20,6 +21,7 @@ def main():
     
     # Render UI components
     render_header()
+    render_environment_info()
     
     # Main content
     if not st.session_state.connected_device:

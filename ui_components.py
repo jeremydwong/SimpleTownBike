@@ -1,5 +1,6 @@
 import streamlit as st
 from utils import run_async, format_device_name
+from ble_manager import BluetoothNotAvailableError
 
 def render_header():
     """Render the application header."""
@@ -21,8 +22,21 @@ def render_device_scanner():
         if st.button("Scan Devices", disabled=st.session_state.scanning):
             st.session_state.scanning = True
             with st.spinner("Scanning for devices..."):
-                st.session_state.devices = run_async(
-                    lambda: st.session_state.ble_manager.scan_devices())
+                try:
+                    st.session_state.devices = run_async(
+                        lambda: st.session_state.ble_manager.scan_devices())
+                except BluetoothNotAvailableError as e:
+                    st.error(str(e))
+                    st.info("""
+                    💡 Tip: If you're running this locally, make sure:
+                    - Your device has Bluetooth capability
+                    - Bluetooth is turned on
+                    - You have the necessary permissions
+                    
+                    For development purposes, you can set BLE_TEST_MODE=true to use mock devices.
+                    """)
+                except Exception as e:
+                    st.error(f"An unexpected error occurred: {str(e)}")
             st.session_state.scanning = False
             st.rerun()
 
@@ -40,14 +54,17 @@ def render_device_selector():
             device = device_options[selected_device]
             if st.button("Connect"):
                 with st.spinner("Connecting..."):
-                    success = run_async(
-                        lambda: st.session_state.ble_manager.connect_device(device['address']))
-                    if success:
-                        st.session_state.connected_device = device
-                        st.success(f"Connected to {device['name']}")
-                        st.rerun()
-                    else:
-                        st.error("Failed to connect to device")
+                    try:
+                        success = run_async(
+                            lambda: st.session_state.ble_manager.connect_device(device['address']))
+                        if success:
+                            st.session_state.connected_device = device
+                            st.success(f"Connected to {device['name']}")
+                            st.rerun()
+                    except BluetoothNotAvailableError as e:
+                        st.error(str(e))
+                    except Exception as e:
+                        st.error(f"Failed to connect to device: {str(e)}")
 
 def render_connected_device():
     """Render the connected device information."""
@@ -58,11 +75,26 @@ def render_connected_device():
         
         if st.button("Disconnect"):
             with st.spinner("Disconnecting..."):
-                success = run_async(
-                    lambda: st.session_state.ble_manager.disconnect_device())
-                if success:
-                    st.session_state.connected_device = None
-                    st.success("Device disconnected")
-                    st.rerun()
-                else:
-                    st.error("Failed to disconnect device")
+                try:
+                    success = run_async(
+                        lambda: st.session_state.ble_manager.disconnect_device())
+                    if success:
+                        st.session_state.connected_device = None
+                        st.success("Device disconnected")
+                        st.rerun()
+                    else:
+                        st.error("Failed to disconnect device")
+                except Exception as e:
+                    st.error(f"Error disconnecting device: {str(e)}")
+
+def render_environment_info():
+    """Render environment information."""
+    st.sidebar.markdown("### Environment Info")
+    is_test_mode = st.session_state.ble_manager.is_test_mode
+    st.sidebar.info(f"{'🔧 Test Mode' if is_test_mode else '🔵 Production Mode'}")
+    
+    if is_test_mode:
+        st.sidebar.warning("""
+        Running in test mode with mock devices.
+        Set BLE_TEST_MODE=false for real device scanning.
+        """)
