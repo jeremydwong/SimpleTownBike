@@ -1,12 +1,17 @@
-[project]
-name = "repl-nix-simpletownbike"
+[tool.poetry]
+name = "SimpleTownBike"
 version = "0.1.0"
-description = "Add your description here"
-requires-python = ">=3.11"
-dependencies = [
-    "bleak>=0.22.3",
-    "matplotlib>=3.9.2",
-    "numpy>=2.1.2",
-    "pandas>=2.2.3",
-    "streamlit>=1.39.0",
-]
+description = "A Streamlit-based bike fitness tracking app with BLE device connectivity"
+authors = ["Your Name <you@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.11,<3.14"
+bleak = "0.22.3"
+streamlit = "1.39.0"
+matplotlib = "3.9.2"
+numpy = "2.1.2"
+pandas = "2.2.3"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
