@@ -1,4 +1,13 @@
 import streamlit as st
+
+# Set page config must be the first Streamlit command
+st.set_page_config(
+    page_title="SimpleTownBike",
+    page_icon="🚴",
+    layout="wide"
+)
+
+# Then follow with other imports
 from utils import init_session_state
 from ui_components import (
     render_header,
@@ -23,13 +32,6 @@ def main():
     # Initialize session state
     init_session_state()
     init_storage_manager()
-    
-    # Set page config
-    st.set_page_config(
-        page_title="SimpleTownBike",
-        page_icon="🚴",
-        layout="wide"
-    )
     
     # Render UI components
     render_header()
