@@ -1,0 +1,35 @@
+2024-10-27 15:59:45.893 python[38389:20662421] PyObjC: Converting exception to Objective-C:
+Traceback (most recent call last):
+  File "/Users/jeremy/opt/anaconda3/envs/stb_env/lib/python3.11/site-packages/bleak/backends/corebluetooth/PeripheralDelegate.py", line 398, in peripheral_didUpdateValueForCharacteristic_error_
+    self._event_loop.call_soon_threadsafe(
+  File "/Users/jeremy/opt/anaconda3/envs/stb_env/lib/python3.11/asyncio/base_events.py", line 807, in call_soon_threadsafe
+    self._check_closed()
+  File "/Users/jeremy/opt/anaconda3/envs/stb_env/lib/python3.11/asyncio/base_events.py", line 520, in _check_closed
+    raise RuntimeError('Event loop is closed')
+RuntimeError: Event loop is closed
+*** Terminating app due to uncaught exception 'OC_PythonException', reason: '<class 'RuntimeError'>: Event loop is closed'
+*** First throw call stack:
+(
+	0   CoreFoundation                      0x00007ff81019789e __exceptionPreprocess + 242
+	1   libobjc.A.dylib                     0x00007ff80fc87d5b objc_exception_throw + 48
+	2   _objc.cpython-311-darwin.so         0x000000013b5dad82 PyObjCErr_ToObjCWithGILState + 114
+	3   _objc.cpython-311-darwin.so         0x000000013b5a8561 method_stub + 12417
+	4   libffi.dylib                        0x00007ff8220554b1 ffi_closure_unix64_inner + 510
+	5   libffi.dylib                        0x00007ff822055a2c ffi_closure_unix64 + 72
+	6   CoreBluetooth                       0x00007ff8260c9ee0 -[CBPeripheral handleCharacteristicEvent:characteristicSelector:delegateSelector:delegateFlag:] + 112
+	7   CoreBluetooth                       0x00007ff8260c5faa -[CBPeripheral handleMsg:args:] + 522
+	8   CoreBluetooth                       0x00007ff8260a21af -[CBCentralManager handleMsg:args:] + 175
+	9   CoreBluetooth                       0x00007ff82608c99f -[CBManager xpcConnectionDidReceiveMsg:args:] + 175
+	10  CoreBluetooth                       0x00007ff82608c8b2 __30-[CBXpcConnection _handleMsg:]_block_invoke + 66
+	11  libdispatch.dylib                   0x00007ff80fea5ac6 _dispatch_call_block_and_release + 12
+	12  libdispatch.dylib                   0x00007ff80fea6dbc _dispatch_client_callout + 8
+	13  libdispatch.dylib                   0x00007ff80feaceff _dispatch_lane_serial_drain + 800
+	14  libdispatch.dylib                   0x00007ff80fead997 _dispatch_lane_invoke + 377
+	15  libdispatch.dylib                   0x00007ff80feacd62 _dispatch_lane_serial_drain + 387
+	16  libdispatch.dylib                   0x00007ff80fead997 _dispatch_lane_invoke + 377
+	17  libdispatch.dylib                   0x00007ff80feb7414 _dispatch_root_queue_drain_deferred_wlh + 271
+	18  libdispatch.dylib                   0x00007ff80feb6d2a _dispatch_workloop_worker_thread + 451
+	19  libsystem_pthread.dylib             0x00007ff810044b84 _pthread_wqthread + 327
+	20  libsystem_pthread.dylib             0x00007ff810043acf start_wqthread + 15
+)
+libc++abi: terminating due to uncaught exception of type NSException

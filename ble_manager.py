@@ -22,6 +22,7 @@ class BLEManager:
     def __init__(self):
         self.client: Optional[BleakClient] = None
         self.connected_device = None
+        self.event_loop = None
         self.is_test_mode = os.getenv('BLE_TEST_MODE', '').lower() == 'true'
         self.known_fitness_services = {
             FTMS_SERVICE_UUID: "Fitness Machine Service",
@@ -93,6 +94,10 @@ class BLEManager:
             current_time = time.time()
             self.metrics['heart_rate']['values'].append(heart_rate)
             self.metrics['heart_rate']['timestamps'].append(current_time)
+            
+            # Use the stored event loop for notifications
+            if self.event_loop:
+                self.event_loop.call_soon_threadsafe(lambda: None)
         except Exception as e:
             logger.error(f"Error processing heart rate data: {e}")
 
@@ -154,6 +159,10 @@ class BLEManager:
                 self.metrics[metric]['values'].append(value)
                 self.metrics[metric]['timestamps'].append(current_time)
 
+            # Use the stored event loop for notifications
+            if self.event_loop:
+                self.event_loop.call_soon_threadsafe(lambda: None)
+                
         except Exception as e:
             logger.error(f"Error processing indoor bike data: {e}")
 
@@ -161,12 +170,16 @@ class BLEManager:
         """Connect to a specific device."""
         if self.is_test_mode:
             self.connected_device = address
+            # Create and store event loop reference for test mode
+            self.event_loop = asyncio.get_event_loop()
             self.mock_data_task = asyncio.create_task(self._mock_data_loop())
             if callback:
                 await callback()
             return True
 
         try:
+            # Create and store event loop reference
+            self.event_loop = asyncio.get_event_loop()
             self.client = BleakClient(address)
             await self.client.connect()
             self.connected_device = address
@@ -197,7 +210,41 @@ class BLEManager:
             logger.error(f"Unexpected error during device connection: {e}")
             return False
 
-    # Rest of the class implementation remains the same...
+    async def disconnect_device(self) -> bool:
+        """Disconnect from the current device."""
+        try:
+            if self.is_test_mode:
+                if self.mock_data_task:
+                    self.mock_data_task.cancel()
+                    self.mock_data_task = None
+                self.connected_device = None
+                self.event_loop = None
+                return True
+
+            if self.client and self.client.is_connected:
+                # Cleanup notifications before disconnecting
+                for service in self.client.services:
+                    for char in service.characteristics:
+                        await self.client.stop_notify(char.uuid)
+                await self.client.disconnect()
+            self.client = None
+            self.connected_device = None
+            self.event_loop = None
+            return True
+        except Exception as e:
+            logger.error(f"Error disconnecting: {e}")
+            return False
+
+    def is_connected(self) -> bool:
+        """Check if currently connected to a device."""
+        if self.is_test_mode:
+            return self.connected_device is not None
+        return self.client is not None and self.client.is_connected
+
+    def get_metrics_data(self) -> Dict:
+        """Get the current metrics data."""
+        return self.metrics
+
     async def check_bluetooth_availability(self):
         """Check if Bluetooth is available on the system."""
         try:
@@ -266,35 +313,3 @@ class BLEManager:
                 "An unexpected error occurred while scanning for devices. "
                 f"Error: {str(e)}"
             )
-
-    async def disconnect_device(self) -> bool:
-        """Disconnect from the current device."""
-        if self.is_test_mode:
-            if self.mock_data_task:
-                self.mock_data_task.cancel()
-                self.mock_data_task = None
-            self.connected_device = None
-            return True
-
-        try:
-            if self.client and self.client.is_connected:
-                await self.client.disconnect()
-                self.client = None
-                self.connected_device = None
-            return True
-        except BleakError as e:
-            logger.error(f"Error disconnecting device: {e}")
-            return False
-        except Exception as e:
-            logger.error(f"Unexpected error during device disconnection: {e}")
-            return False
-
-    def is_connected(self) -> bool:
-        """Check if currently connected to a device."""
-        if self.is_test_mode:
-            return self.connected_device is not None
-        return self.client is not None and self.client.is_connected
-
-    def get_metrics_data(self) -> Dict:
-        """Get the current metrics data."""
-        return self.metrics
