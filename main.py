@@ -14,9 +14,17 @@ def init_storage_manager():
     """Initialize storage manager in session state if not present."""
     if 'storage_manager' not in st.session_state:
         st.session_state.storage_manager = StorageManager()
+        if not st.session_state.storage_manager.is_authenticated():
+            st.error("⚠️ Failed to authenticate with Dropbox. Please check your access token.")
+            st.info("Your workout data will not be saved until the Dropbox connection is fixed.")
 
 def save_current_workout():
     """Save current workout data to Dropbox."""
+    if not st.session_state.storage_manager.is_authenticated():
+        st.error("Cannot save workout: Dropbox authentication failed.")
+        st.info("Please ensure your Dropbox access token is valid.")
+        return
+
     if st.session_state.ble_manager.get_metrics_data():
         success = st.session_state.storage_manager.save_workout_data(
             st.session_state.ble_manager.get_metrics_data()
@@ -51,9 +59,10 @@ def main():
         render_target_settings()
         render_connected_device()
         
-        # Add save workout button
-        if st.button("Save Workout Data"):
-            save_current_workout()
+        # Add save workout button if Dropbox is authenticated
+        if st.session_state.storage_manager.is_authenticated():
+            if st.button("Save Workout Data"):
+                save_current_workout()
     
     # Footer
     st.markdown("---")

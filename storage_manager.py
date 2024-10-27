@@ -2,23 +2,38 @@ import os
 import json
 from datetime import datetime
 import dropbox
-from dropbox.exceptions import ApiError
+from dropbox.exceptions import ApiError, AuthError
 import logging
 
 logger = logging.getLogger(__name__)
 
 class StorageManager:
     def __init__(self):
-        self.dbx = dropbox.Dropbox(os.environ['DROPBOX_ACCESS_TOKEN'])
-        self._ensure_base_directory()
+        try:
+            self.dbx = dropbox.Dropbox(os.environ['DROPBOX_ACCESS_TOKEN'])
+            self._ensure_base_directory()
+        except (AuthError, KeyError) as e:
+            logger.error(f"Dropbox authentication error: {str(e)}")
+            self.dbx = None
 
     def _ensure_base_directory(self):
         """Ensure the base directory exists in Dropbox."""
+        if not self.dbx:
+            return False
         try:
             self.dbx.files_list_folder('/workouts')
         except ApiError as e:
             if e.error.is_path() and e.error.get_path().is_not_found():
-                self.dbx.files_create_folder_v2('/workouts')
+                try:
+                    self.dbx.files_create_folder_v2('/workouts')
+                except ApiError as folder_error:
+                    logger.error(f"Failed to create workouts folder: {str(folder_error)}")
+                    return False
+        return True
+
+    def is_authenticated(self) -> bool:
+        """Check if Dropbox client is properly authenticated."""
+        return self.dbx is not None
 
     def save_workout_data(self, metrics: dict) -> bool:
         """
@@ -30,6 +45,10 @@ class StorageManager:
         Returns:
             bool: True if save was successful, False otherwise
         """
+        if not self.is_authenticated():
+            logger.error("Dropbox client is not authenticated")
+            return False
+
         try:
             # Create a timestamp for the filename
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -76,6 +95,10 @@ class StorageManager:
         Returns:
             list: List of workout files information
         """
+        if not self.is_authenticated():
+            logger.error("Dropbox client is not authenticated")
+            return []
+
         try:
             result = self.dbx.files_list_folder('/workouts')
             workouts = []
@@ -101,6 +124,10 @@ class StorageManager:
         Returns:
             dict: Workout data or empty dict if error occurs
         """
+        if not self.is_authenticated():
+            logger.error("Dropbox client is not authenticated")
+            return {}
+
         try:
             _, response = self.dbx.files_download(file_path)
             return json.loads(response.content)
