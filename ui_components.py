@@ -1,6 +1,7 @@
 import streamlit as st
 from utils import run_async, format_device_name
 from ble_manager import BluetoothNotAvailableError
+from metrics_visualization import render_metrics_dashboard
 
 def render_header():
     """Render the application header."""
@@ -67,25 +68,33 @@ def render_device_selector():
                         st.error(f"Failed to connect to device: {str(e)}")
 
 def render_connected_device():
-    """Render the connected device information."""
+    """Render the connected device information and metrics."""
     if st.session_state.connected_device:
-        st.subheader("Connected Device")
-        st.write(f"Name: {st.session_state.connected_device['name']}")
-        st.write(f"Address: {st.session_state.connected_device['address']}")
+        col1, col2 = st.columns([3, 1])
         
-        if st.button("Disconnect"):
-            with st.spinner("Disconnecting..."):
-                try:
-                    success = run_async(
-                        lambda: st.session_state.ble_manager.disconnect_device())
-                    if success:
-                        st.session_state.connected_device = None
-                        st.success("Device disconnected")
-                        st.rerun()
-                    else:
-                        st.error("Failed to disconnect device")
-                except Exception as e:
-                    st.error(f"Error disconnecting device: {str(e)}")
+        with col1:
+            st.subheader("Connected Device")
+            st.write(f"Name: {st.session_state.connected_device['name']}")
+            st.write(f"Address: {st.session_state.connected_device['address']}")
+        
+        with col2:
+            if st.button("Disconnect"):
+                with st.spinner("Disconnecting..."):
+                    try:
+                        success = run_async(
+                            lambda: st.session_state.ble_manager.disconnect_device())
+                        if success:
+                            st.session_state.connected_device = None
+                            st.success("Device disconnected")
+                            st.rerun()
+                        else:
+                            st.error("Failed to disconnect device")
+                    except Exception as e:
+                        st.error(f"Error disconnecting device: {str(e)}")
+        
+        # Render metrics dashboard
+        metrics = st.session_state.ble_manager.get_metrics_data()
+        render_metrics_dashboard(metrics)
 
 def render_environment_info():
     """Render environment information."""
