@@ -1,9 +1,19 @@
-[project]
-name = "repl-nix-simpletownbike"
+[tool.poetry]
+name = "simpletownbike"
 version = "0.1.0"
-description = "Add your description here"
-requires-python = ">=3.11"
-dependencies = [
-    "bleak>=0.22.3",
-    "streamlit>=1.39.0",
-]
+description = "Your project description"
+authors = ["jeremy wong <jeremydwong@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11,<3.14"
+bleak = "0.22.3"
+streamlit = "1.39.0"
+
+[tool.poetry.group.dev.dependencies]
+# Development dependencies go here
+# pytest = "^7.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
