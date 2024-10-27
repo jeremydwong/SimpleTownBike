@@ -9,6 +9,7 @@ from ui_components import (
 )
 from target_settings import render_target_settings
 from storage_manager import StorageManager
+from workout_manager import render_workout_history, render_current_session_controls
 
 def init_storage_manager():
     """Initialize storage manager in session state if not present."""
@@ -17,22 +18,6 @@ def init_storage_manager():
         if not st.session_state.storage_manager.is_authenticated():
             st.error("⚠️ Failed to authenticate with Dropbox. Please check your access token.")
             st.info("Your workout data will not be saved until the Dropbox connection is fixed.")
-
-def save_current_workout():
-    """Save current workout data to Dropbox."""
-    if not st.session_state.storage_manager.is_authenticated():
-        st.error("Cannot save workout: Dropbox authentication failed.")
-        st.info("Please ensure your Dropbox access token is valid.")
-        return
-
-    if st.session_state.ble_manager.get_metrics_data():
-        success = st.session_state.storage_manager.save_workout_data(
-            st.session_state.ble_manager.get_metrics_data()
-        )
-        if success:
-            st.success("Workout data saved successfully!")
-        else:
-            st.error("Failed to save workout data. Please try again.")
 
 def main():
     # Initialize session state
@@ -52,17 +37,24 @@ def main():
     
     # Main content
     if not st.session_state.connected_device:
-        render_device_scanner()
-        render_device_selector()
+        # Show device connection interface and workout history
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            render_device_scanner()
+            render_device_selector()
+        with col2:
+            render_workout_history()
     else:
-        # Render target settings in sidebar when device is connected
+        # Render target settings and session controls in sidebar
         render_target_settings()
+        render_current_session_controls()
+        
+        # Show connected device interface and metrics
         render_connected_device()
         
-        # Add save workout button if Dropbox is authenticated
-        if st.session_state.storage_manager.is_authenticated():
-            if st.button("Save Workout Data"):
-                save_current_workout()
+        # Show workout history below the metrics
+        st.markdown("---")
+        render_workout_history()
     
     # Footer
     st.markdown("---")
