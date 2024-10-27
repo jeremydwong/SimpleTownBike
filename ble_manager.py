@@ -9,6 +9,12 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# FTMS characteristic UUIDs
+FTMS_SERVICE_UUID = "00001826-0000-1000-8000-00805f9b34fb"
+INDOOR_BIKE_DATA_UUID = "00002ad2-0000-1000-8000-00805f9b34fb"
+HEART_RATE_SERVICE_UUID = "0000180d-0000-1000-8000-00805f9b34fb"
+HEART_RATE_MEASUREMENT_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
+
 class BluetoothNotAvailableError(Exception):
     pass
 
@@ -18,29 +24,47 @@ class BLEManager:
         self.connected_device = None
         self.is_test_mode = os.getenv('BLE_TEST_MODE', '').lower() == 'true'
         self.known_fitness_services = {
-            "0x1826": "Fitness Machine Service",
-            "0x180D": "Heart Rate Service",
-            "0x1818": "Cycling Power Service",
+            FTMS_SERVICE_UUID: "Fitness Machine Service",
+            HEART_RATE_SERVICE_UUID: "Heart Rate Service",
         }
-        # Data storage for metrics
+        # Extended metrics storage
         self.metrics = {
             'heart_rate': {'values': [], 'timestamps': []},
             'power': {'values': [], 'timestamps': []},
-            'cadence': {'values': [], 'timestamps': []}
+            'avg_power': {'values': [], 'timestamps': []},
+            'cadence': {'values': [], 'timestamps': []},
+            'avg_cadence': {'values': [], 'timestamps': []},
+            'speed': {'values': [], 'timestamps': []},
+            'avg_speed': {'values': [], 'timestamps': []},
+            'distance': {'values': [], 'timestamps': []},
+            'resistance': {'values': [], 'timestamps': []}
         }
         self.last_update = time.time()
         self.mock_data_task = None
 
     def _generate_mock_data(self):
         """Generate mock data for testing."""
-        hr = np.random.normal(140, 10)  # Heart rate around 140 bpm
-        power = np.random.normal(200, 20)  # Power around 200W
-        cadence = np.random.normal(80, 5)  # Cadence around 80 rpm
+        current_time = time.time()
+        t = current_time - self.last_update
+        
+        # Generate more realistic mock data with time-based variations
+        hr = 120 + 20 * np.sin(t/60)  # Heart rate varying between 100-140
+        power = 180 + 40 * np.sin(t/30)  # Power varying between 140-220W
+        cadence = 75 + 10 * np.sin(t/45)  # Cadence varying between 65-85
+        speed = 25 + 5 * np.sin(t/90)  # Speed varying between 20-30 km/h
+        distance = (t * speed / 3.6)  # Distance in meters
+        resistance = 8 + 2 * np.sin(t/120)  # Resistance level between 6-10
         
         return {
             'heart_rate': max(60, min(200, hr)),
             'power': max(0, min(400, power)),
-            'cadence': max(0, min(120, cadence))
+            'avg_power': max(0, min(400, np.mean(self.metrics['power']['values'][-10:] if self.metrics['power']['values'] else [power]))),
+            'cadence': max(0, min(120, cadence)),
+            'avg_cadence': max(0, min(120, np.mean(self.metrics['cadence']['values'][-10:] if self.metrics['cadence']['values'] else [cadence]))),
+            'speed': max(0, min(50, speed)),
+            'avg_speed': max(0, min(50, np.mean(self.metrics['speed']['values'][-10:] if self.metrics['speed']['values'] else [speed]))),
+            'distance': distance,
+            'resistance': max(1, min(20, resistance))
         }
 
     async def _mock_data_loop(self):
@@ -62,6 +86,118 @@ class BLEManager:
             
             await asyncio.sleep(1)
 
+    def _handle_heart_rate_data(self, sender: int, data: bytearray):
+        """Handle heart rate measurement data."""
+        try:
+            heart_rate = data[1]
+            current_time = time.time()
+            self.metrics['heart_rate']['values'].append(heart_rate)
+            self.metrics['heart_rate']['timestamps'].append(current_time)
+        except Exception as e:
+            logger.error(f"Error processing heart rate data: {e}")
+
+    def _handle_indoor_bike_data(self, sender: int, data: bytearray):
+        """Handle indoor bike data according to FTMS specification."""
+        try:
+            current_time = time.time()
+            flags = data[0]
+            current_index = 2  # Start after flags and instantaneous speed
+
+            # Parse data based on flags
+            metrics_data = {}
+            
+            # More Data (Bit 0) - reserved for future use
+            
+            # Average Speed Present (Bit 1)
+            if flags & (1 << 1):
+                avg_speed = int.from_bytes(data[current_index:current_index+2], byteorder='little') / 100  # km/h
+                metrics_data['avg_speed'] = avg_speed
+                current_index += 2
+
+            # Instantaneous Cadence Present (Bit 2)
+            if flags & (1 << 2):
+                cadence = int.from_bytes(data[current_index:current_index+2], byteorder='little') / 2  # rpm
+                metrics_data['cadence'] = cadence
+                current_index += 2
+
+            # Average Cadence Present (Bit 3)
+            if flags & (1 << 3):
+                avg_cadence = int.from_bytes(data[current_index:current_index+2], byteorder='little') / 2  # rpm
+                metrics_data['avg_cadence'] = avg_cadence
+                current_index += 2
+
+            # Total Distance Present (Bit 4)
+            if flags & (1 << 4):
+                distance = int.from_bytes(data[current_index:current_index+3], byteorder='little')  # meters
+                metrics_data['distance'] = distance
+                current_index += 3
+
+            # Resistance Level Present (Bit 5)
+            if flags & (1 << 5):
+                resistance = int.from_bytes(data[current_index:current_index+2], byteorder='little')
+                metrics_data['resistance'] = resistance
+                current_index += 2
+
+            # Instantaneous Power Present (Bit 6)
+            if flags & (1 << 6):
+                power = int.from_bytes(data[current_index:current_index+2], byteorder='little')  # watts
+                metrics_data['power'] = power
+                current_index += 2
+
+            # Average Power Present (Bit 7)
+            if flags & (1 << 7):
+                avg_power = int.from_bytes(data[current_index:current_index+2], byteorder='little')  # watts
+                metrics_data['avg_power'] = avg_power
+
+            # Update metrics
+            for metric, value in metrics_data.items():
+                self.metrics[metric]['values'].append(value)
+                self.metrics[metric]['timestamps'].append(current_time)
+
+        except Exception as e:
+            logger.error(f"Error processing indoor bike data: {e}")
+
+    async def connect_device(self, address: str, callback: Callable = None) -> bool:
+        """Connect to a specific device."""
+        if self.is_test_mode:
+            self.connected_device = address
+            self.mock_data_task = asyncio.create_task(self._mock_data_loop())
+            if callback:
+                await callback()
+            return True
+
+        try:
+            self.client = BleakClient(address)
+            await self.client.connect()
+            self.connected_device = address
+            
+            # Subscribe to notifications for each service
+            services = await self.client.get_services()
+            for service in services:
+                if service.uuid == FTMS_SERVICE_UUID:
+                    char = self.client.services.get_characteristic(INDOOR_BIKE_DATA_UUID)
+                    if char:
+                        await self.client.start_notify(char.uuid, self._handle_indoor_bike_data)
+                elif service.uuid == HEART_RATE_SERVICE_UUID:
+                    char = self.client.services.get_characteristic(HEART_RATE_MEASUREMENT_UUID)
+                    if char:
+                        await self.client.start_notify(char.uuid, self._handle_heart_rate_data)
+            
+            if callback:
+                await callback()
+            
+            return True
+        except BleakError as e:
+            logger.error(f"Failed to connect to device: {e}")
+            raise BluetoothNotAvailableError(
+                f"Failed to connect to device: {str(e)}. "
+                "Please make sure the device is in range and powered on."
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error during device connection: {e}")
+            return False
+
+    # Rest of the class implementation remains the same...
     async def check_bluetooth_availability(self):
         """Check if Bluetooth is available on the system."""
         try:
@@ -130,78 +266,6 @@ class BLEManager:
                 "An unexpected error occurred while scanning for devices. "
                 f"Error: {str(e)}"
             )
-
-    def _handle_heart_rate_data(self, sender: int, data: bytearray):
-        """Handle heart rate measurement data."""
-        try:
-            heart_rate = data[1]
-            current_time = time.time()
-            self.metrics['heart_rate']['values'].append(heart_rate)
-            self.metrics['heart_rate']['timestamps'].append(current_time)
-        except Exception as e:
-            logger.error(f"Error processing heart rate data: {e}")
-
-    def _handle_power_data(self, sender: int, data: bytearray):
-        """Handle cycling power measurement data."""
-        try:
-            power = int.from_bytes(data[2:4], byteorder='little')
-            current_time = time.time()
-            self.metrics['power']['values'].append(power)
-            self.metrics['power']['timestamps'].append(current_time)
-        except Exception as e:
-            logger.error(f"Error processing power data: {e}")
-
-    def _handle_cadence_data(self, sender: int, data: bytearray):
-        """Handle cadence measurement data."""
-        try:
-            cadence = int.from_bytes(data[4:6], byteorder='little')
-            current_time = time.time()
-            self.metrics['cadence']['values'].append(cadence)
-            self.metrics['cadence']['timestamps'].append(current_time)
-        except Exception as e:
-            logger.error(f"Error processing cadence data: {e}")
-
-    async def connect_device(self, address: str, callback: Callable = None) -> bool:
-        """Connect to a specific device."""
-        if self.is_test_mode:
-            self.connected_device = address
-            # Start mock data generation
-            self.mock_data_task = asyncio.create_task(self._mock_data_loop())
-            if callback:
-                await callback()
-            return True
-
-        try:
-            self.client = BleakClient(address)
-            await self.client.connect()
-            self.connected_device = address
-            
-            # Subscribe to notifications for each service
-            services = await self.client.get_services()
-            for service in services:
-                if "heart rate" in service.description.lower():
-                    for char in service.characteristics:
-                        if "measurement" in char.description.lower():
-                            await self.client.start_notify(char.uuid, self._handle_heart_rate_data)
-                elif "cycling power" in service.description.lower():
-                    for char in service.characteristics:
-                        if "measurement" in char.description.lower():
-                            await self.client.start_notify(char.uuid, self._handle_power_data)
-                            await self.client.start_notify(char.uuid, self._handle_cadence_data)
-            
-            if callback:
-                await callback()
-            
-            return True
-        except BleakError as e:
-            logger.error(f"Failed to connect to device: {e}")
-            raise BluetoothNotAvailableError(
-                f"Failed to connect to device: {str(e)}. "
-                "Please make sure the device is in range and powered on."
-            )
-        except Exception as e:
-            logger.error(f"Unexpected error during device connection: {e}")
-            return False
 
     async def disconnect_device(self) -> bool:
         """Disconnect from the current device."""
