@@ -7,6 +7,7 @@ from ui_components import (
     render_connected_device,
     render_environment_info
 )
+from target_settings import render_target_settings
 
 def main():
     # Initialize session state
@@ -28,6 +29,8 @@ def main():
         render_device_scanner()
         render_device_selector()
     else:
+        # Render target settings in sidebar when device is connected
+        render_target_settings()
         render_connected_device()
     
     # Footer
